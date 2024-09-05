@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase_chatapp</title>
+    <style>.remove:hover{background:aquamarine;}</style>
+</head>
+<body>
+
+    <!-- コンテンツ表示画面 -->
+    <div>
+        <div>
+            名前：<input type="text" id="uname">
+        </div>
+        <div>
+            <textarea id="text" cols="30" rows="10"></textarea>
+            <button id="send">送信</button>
+        </div>
+        <div id="output" style="overflow: auto;height: 300px;"></div>
+    </div>
+
+    <!-- JQuery -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+    <!-- Firebaseとチャット機能のスクリプト -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+        import { getDatabase, ref, push, set, remove, update, onChildAdded } 
+        from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+
+        // Firebaseの設定
+        const firebaseConfig = {
+            apiKey: "",
+            authDomain: "kadai04-chat-5b85e.firebaseapp.com",
+            databaseURL: "https://kadai04-chat-5b85e-default-rtdb.firebaseio.com",
+            projectId: "kadai04-chat-5b85e",
+            storageBucket: "kadai04-chat-5b85e.appspot.com",
+            messagingSenderId: "514791600210",
+            appId: "1:514791600210:web:c552c26a08d2a9f914af8b",
+        };
+
+        // Firebaseアプリの初期化
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+        const dbRef = ref(db, "chat");
+
+        // メッセージ送信処理
+        async function sendMessage() {
+            try {
+                const uname = $("#uname").val(); // 名前
+                const text = $("#text").val();   // コメント
+                if (!uname || !text) {
+                    alert("名前とコメントを入力してください");
+                    return;
+                }
+                
+                const now = new Date();
+                const formattedDate = now.toLocaleString(); // 日付と時間をフォーマット
+
+                // メッセージオブジェクトを作成
+                const msg = {
+                    uname: uname,
+                    text: text,
+                    date: formattedDate
+                };
+
+                // Firebaseにメッセージを追加
+                const newPostRef = push(dbRef); 
+                await set(newPostRef, msg); // Firebaseに保存
+                console.log("メッセージ送信:", msg); // コンソールにメッセージを出力
+
+                // 送信後に入力欄をクリア
+                $("#uname").val("");
+                $("#text").val("");
+                scrollToBottom(); // 送信後にスクロール
+            } catch (error) {
+                console.error("メッセージ送信エラー:", error);
+                alert("メッセージ送信中にエラーが発生しました");
+            }
+        }
+
+        // メッセージの取得
+        function onMessageAdded() {
+            onChildAdded(dbRef, function (data) {
+                const msg = data.val();
+                const key = data.key;
+                let h = `<p id="${key}"><strong>${msg.uname}</strong><br><small>${msg.date}</small><br>
+                    <span contentEditable="true" id="${key}_update">${msg.text}</span>
+                    <br>
+                    <span class="remove" data-key="${key}">🚮</span>
+                    <span class="update" data-key="${key}">🆙</span>
+                    </p>`;
+                $("#output").append(h);
+                scrollToBottom();
+            });
+        }
+
+        // スクロール処理
+        function scrollToBottom() {
+            const output = $("#output");
+            output.scrollTop(output.prop("scrollHeight"));
+        }
+
+        // メッセージ削除処理
+        async function removeMessage(key) {
+            try {
+                const removeItemRef = ref(db, "chat/" + key);
+                await remove(removeItemRef);
+            } catch (error) {
+                console.error("削除エラー:", error);
+                alert("削除中にエラーが発生しました");
+            }
+        }
+
+        // メッセージ更新処理
+        async function updateMessage(key) {
+            try {
+                const newText = $(`#${key}_update`).html();
+                if (newText === undefined) {
+                    throw new Error('更新対象のメッセージが見つかりません');
+                }
+                const updateRef = ref(db, "chat/" + key);
+                await update(updateRef, {
+                    text: newText
+                });
+            } catch (error) {
+                console.error("更新エラー:", error);
+                alert("更新中にエラーが発生しました");
+            }
+        }
+
+        // 送信ボタンイベント
+        $("#send").on("click", sendMessage);
+
+        // Enterキーでの送信処理
+        $("#text").on("keydown", function (e) {
+            if (e.keyCode === 13) sendMessage();
+        });
+
+        // 削除イベント (動的に追加された要素にも対応)
+        $("#output").on("click", ".remove", function () {
+            const key = $(this).attr("data-key");
+            removeMessage(key);
+        });
+
+        // 更新イベント (動的に追加された要素にも対応)
+        $("#output").on("click", ".update", function () {
+            const key = $(this).attr("data-key");
+            updateMessage(key);
+        });
+
+        // Firebaseからのデータ取得開始
+        onMessageAdded();
+    </script>
+
+</body>
+</html>
